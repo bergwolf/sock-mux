@@ -4,6 +4,7 @@
 package main
 
 import (
+	"flag"
 	"io"
 	"net"
 
@@ -49,8 +50,10 @@ func serv(channel, proto, addr string) error {
 }
 
 func main() {
-	vmChannel := "/tmp/testvm.sock"
-	proxyAddr := "/tmp/proxy.sock"
+	channel := flag.String("s", "/tmp/target.sock", "unix socket to multiplex on")
+	proxyAddr := flag.String("l", "/tmp/proxy.sock", "unix socket to listen at")
 
-	serv(vmChannel, "unix", proxyAddr)
+	flag.Parse()
+
+	serv(*channel, "unix", *proxyAddr)
 }

@@ -44,7 +44,7 @@ func server(channel string) error {
 
 }
 func main() {
-	vmChannel := "/tmp/testvm.sock"
+	vmChannel := "/tmp/target.sock"
 
 	server(vmChannel)
 }

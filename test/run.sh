@@ -4,5 +4,5 @@
 
 rm -f /tmp/proxy-*.sock
 for I in $(seq 100); do
-	./pidproxy &
+	../proxy -l /tmp/proxy-$I.sock &
 done

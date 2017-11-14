@@ -1,25 +1,21 @@
 // A simple proxy that multiplexes a unix socket connection
 //
-// Copyright 2017 HyperHQ
+// Copyright 2017 HyperHQ Inc.
+
 package main
 
 import (
 	"flag"
 	"io"
 	"net"
+	"sync"
 
 	"github.com/golang/glog"
 	"github.com/hashicorp/yamux"
 )
 
 // @channel is the unix socket address we want to multiplex
-func serv(channel, proto, addr string) error {
-	// yamux connection
-	servConn, err := net.Dial("unix", channel)
-	if err != nil {
-		glog.Errorf("fail to dial channel(%s): %s", channel, err.Error())
-		return err
-	}
+func serv(servConn io.ReadWriteCloser, proto, addr string) error {
 	session, err := yamux.Client(servConn, nil)
 	if err != nil {
 		glog.Errorf("fail to create yamux client: %s", err.Error())
@@ -32,6 +28,7 @@ func serv(channel, proto, addr string) error {
 		glog.Errorf("fail to listen on %s:%s: %s", proto, addr, err.Error())
 		return err
 	}
+	defer l.Close()
 
 	for {
 		conn, err := l.Accept()
@@ -44,8 +41,27 @@ func serv(channel, proto, addr string) error {
 			glog.Errorf("fail to open yamux stream: %s", err.Error())
 			return err
 		}
-		go io.Copy(conn, stream)
-		go io.Copy(stream, conn)
+		wg := &sync.WaitGroup{}
+		once := &sync.Once{}
+		cleanup := func() {
+			conn.Close()
+			stream.Close()
+		}
+		copyStream := func(dst io.Writer, src io.Reader) {
+			_, err := io.Copy(dst, src)
+			if err != nil {
+				once.Do(cleanup)
+			}
+			wg.Done()
+		}
+
+		wg.Add(2)
+		go copyStream(conn, stream)
+		go copyStream(stream, conn)
+		go func() {
+			wg.Wait()
+			once.Do(cleanup)
+		}()
 	}
 }
 
@@ -55,5 +71,13 @@ func main() {
 
 	flag.Parse()
 
-	serv(*channel, "unix", *proxyAddr)
+	// yamux connection
+	servConn, err := net.Dial("unix", *channel)
+	if err != nil {
+		glog.Errorf("fail to dial channel(%s): %s", channel, err.Error())
+		return
+	}
+	defer servConn.Close()
+
+	serv(servConn, "unix", *proxyAddr)
 }

@@ -1,10 +1,10 @@
 // A simple proxy that multiplexes a unix socket connection
 //
-// Copyright 2017 HyperHQ
+// Copyright 2017 HyperHQ Inc.
+
 package main
 
 import (
-	"fmt"
 	"io"
 	"net"
 	"os"
@@ -19,30 +19,35 @@ func server(channel string) error {
 	if err != nil {
 		return err
 	}
+	defer l.Close()
+
+	// listen once
+	conn, err := l.Accept()
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	session, err := yamux.Server(conn, nil)
+	if err != nil {
+		return err
+	}
+	defer session.Close()
 
 	for {
-		conn, err := l.Accept()
+		stream, err := session.Accept()
 		if err != nil {
 			return err
 		}
-
-		session, err := yamux.Server(conn, nil)
-		if err != nil {
-			return err
-		}
-
-		for {
-			stream, err := session.Accept()
-			if err != nil {
-				fmt.Println("stream accept failed: ", err)
-				break
-			}
-			fmt.Println("New yamux connection")
-			go io.Copy(os.Stdout, stream)
-		}
+		go func() {
+			io.Copy(stream, stream)
+			stream.Close()
+		}()
 	}
 
+	return nil
 }
+
 func main() {
 	vmChannel := "/tmp/target.sock"
 

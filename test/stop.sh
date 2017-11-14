@@ -1,6 +1,6 @@
 #! /bin/bash
 
-pkill pidproxy
+pkill proxy
 pkill server
 
-rm -f /tmp/proxy-*.sock
+rm -f /tmp/target.sock
